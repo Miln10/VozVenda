@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body>
+<script>
+const { ipcRenderer } = require('electron');
+
+let recognition = null;
+let isRecording = false;
+let windowTimer = null;
+let config = {};
+let currentText = '';
+let voiceSeconds = 0;
+let voiceActive = false;
+let voiceTimer = null;
+
+// ── Recebe comando de início ──────────────────────────────────────────────
+ipcRenderer.on('start-recording', (event, cfg) => {
+  config = cfg;
+  startWindow();
+});
+
+// ── Recebe comando de parada ──────────────────────────────────────────────
+ipcRenderer.on('stop-recording', () => {
+  isRecording = false;
+  stopWindow();
+});
+
+// ── Inicia uma janela de captura ──────────────────────────────────────────
+function startWindow() {
+  isRecording = true;
+  currentText = '';
+  voiceSeconds = 0;
+  voiceActive = false;
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    ipcRenderer.send('recorder-error', 'SpeechRecognition não suportado neste ambiente.');
+    return;
+  }
+
+  recognition = new SR();
+  recognition.lang = 'pt-BR';
+  recognition.continuous = true;
+  recognition.interimResults = false; // só finais pra economizar
+
+  recognition.onresult = (e) => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        currentText += e.results[i][0].transcript + ' ';
+      }
+    }
+  };
+
+  recognition.onspeechstart = () => {
+    if (!voiceActive) {
+      voiceActive = true;
+      // Conta segundos de voz ativa
+      voiceTimer = setInterval(() => {
+        if (voiceActive) voiceSeconds++;
+      }, 1000);
+    }
+  };
+
+  recognition.onspeechend = () => {
+    voiceActive = false;
+    if (voiceTimer) { clearInterval(voiceTimer); voiceTimer = null; }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') return; // normal
+    if (e.error === 'aborted') return;   // normal ao parar
+    ipcRenderer.send('recorder-error', e.error);
+  };
+
+  recognition.onend = () => {
+    // Reinicia automaticamente se ainda estiver na janela
+    if (isRecording) {
+      try { recognition.start(); } catch(e) {}
+    }
+  };
+
+  try { recognition.start(); } catch(e) {}
+
+  // Timer da janela
+  const windowSize = (config.windowSize || 60) * 1000;
+  windowTimer = setTimeout(() => {
+    endWindow();
+  }, windowSize);
+}
+
+// ── Finaliza a janela e envia resultado ───────────────────────────────────
+function endWindow() {
+  stopWindow();
+
+  // Envia resultado pro main process
+  ipcRenderer.send('window-result', {
+    transcription: currentText.trim(),
+    voiceSeconds: voiceSeconds
+  });
+
+  // Inicia próxima janela se ainda estiver ativo
+  if (isRecording) {
+    setTimeout(() => startWindow(), 500);
+  }
+}
+
+// ── Para a recognition atual ──────────────────────────────────────────────
+function stopWindow() {
+  if (windowTimer) { clearTimeout(windowTimer); windowTimer = null; }
+  if (voiceTimer) { clearInterval(voiceTimer); voiceTimer = null; }
+  if (recognition) {
+    recognition.onend = null;
+    try { recognition.stop(); } catch(e) {}
+    recognition = null;
+  }
+}
+</script>
+</body>
+</html>

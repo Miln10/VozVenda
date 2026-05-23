@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VozVenda — Reconhecimento de Vendas</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #111111; --surface2: #161616;
+    --border: #1e1e1e; --accent: #00ff87; --accent2: #ff6b35;
+    --text: #f0f0f0; --muted: #555; --danger: #ff3b3b; --warn: #f0c040;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; }
+  body::before { content: ''; position: fixed; inset: 0; background-image: linear-gradient(rgba(0,255,135,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,135,0.03) 1px,transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 0; }
+  .container { max-width: 900px; margin: 0 auto; padding: 36px 24px 80px; position: relative; z-index: 1; }
+
+  /* HEADER */
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 40px; height: 40px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo-text { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo-text span { color: var(--accent); }
+  .status-badge { font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); letter-spacing: 1px; text-transform: uppercase; transition: all 0.3s; }
+  .status-badge.ok { border-color: var(--accent); color: var(--accent); background: rgba(0,255,135,0.05); }
+  .status-badge.listening { border-color: var(--accent); color: var(--accent); background: rgba(0,255,135,0.05); }
+  .status-badge.voice { border-color: var(--warn); color: var(--warn); background: rgba(240,192,64,0.05); }
+  .status-badge.analyzing { border-color: var(--accent2); color: var(--accent2); background: rgba(255,107,53,0.05); }
+
+  /* STEPS */
+  .steps { display: flex; gap: 0; margin-bottom: 28px; }
+  .step { flex: 1; display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .step:first-child { border-radius: 12px 0 0 12px; }
+  .step:last-child { border-radius: 0 12px 12px 0; }
+  .step:not(:first-child) { border-left: none; }
+  .step.active { background: var(--surface2); border-color: var(--accent); color: var(--accent); z-index: 1; }
+  .step.done { color: var(--accent); }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 11px; font-family: 'DM Mono', monospace; flex-shrink: 0; }
+  .step.done .step-num { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+  .card-title { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+
+  /* API KEY */
+  .apikey-row { display: flex; align-items: center; gap: 12px; }
+  .apikey-input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); outline: none; transition: border-color 0.2s; }
+  .apikey-input:focus { border-color: var(--accent); }
+  .apikey-ok { font-size: 18px; opacity: 0; transition: opacity 0.3s; }
+  .apikey-ok.visible { opacity: 1; }
+  .hint { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .hint a { color: var(--accent); text-decoration: none; }
+
+  /* MENU TABS */
+  .menu-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .menu-tab { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
+  .menu-tab:hover { border-color: var(--accent); color: var(--text); }
+  .menu-tab.active { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+
+  .menu-panel { display: none; }
+  .menu-panel.active { display: block; }
+
+  /* UPLOAD ZONE */
+  .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(0,255,135,0.03); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 32px; margin-bottom: 10px; }
+  .upload-label { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .upload-hint { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+
+  .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 14px; }
+  .preview-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+  .preview-remove { position: absolute; top: 4px; right: 4px; background: var(--danger); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .preview-item { position: relative; }
+
+  /* INPUT FIELDS */
+  .field-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); outline: none; transition: border-color 0.2s; }
+  .field-input:focus { border-color: var(--accent); }
+  .field-label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 6px; }
+  .field-group { margin-bottom: 14px; }
+
+  textarea.field-input { resize: none; height: 120px; line-height: 1.7; }
+
+  /* BUTTONS */
+  .btn-primary { width: 100%; padding: 14px; background: var(--accent); color: #000; border: none; border-radius: 12px; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 8px; }
+  .btn-primary:hover { background: #00e077; transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
+  .btn-secondary { width: 100%; padding: 12px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 12px; font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 8px; }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* MENU PREVIEW */
+  .menu-loaded { background: rgba(0,255,135,0.05); border: 1px solid rgba(0,255,135,0.2); border-radius: 12px; padding: 16px 20px; margin-top: 16px; display: none; }
+  .menu-loaded.visible { display: block; }
+  .menu-loaded-title { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  .menu-items-grid { display: grid; gap: 6px; max-height: 200px; overflow-y: auto; }
+  .menu-item-row { display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .menu-item-name { color: var(--text); }
+  .menu-item-price { color: var(--accent); }
+
+  /* SETTINGS */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .setting-item label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 6px; }
+  .setting-item select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); outline: none; cursor: pointer; }
+  .setting-item input[type=range] { width: 100%; accent-color: var(--accent); margin-top: 4px; }
+  .setting-value { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); margin-top: 4px; }
+
+  /* MONITOR */
+  .monitor { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; margin-bottom: 20px; position: relative; overflow: hidden; transition: border-color 0.4s; }
+  .monitor.listening { border-color: rgba(0,255,135,0.3); }
+  .monitor.voice-detected { border-color: var(--warn); }
+  .monitor.analyzing { border-color: var(--accent2); }
+  .monitor::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg,transparent,var(--accent),transparent); opacity: 0; transition: opacity 0.3s; }
+  .monitor.listening::before { opacity: 1; }
+
+  .monitor-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .monitor-stat { text-align: center; }
+  .monitor-stat-value { font-family: 'DM Mono', monospace; font-size: 26px; font-weight: 500; }
+  .v-accent { color: var(--accent); } .v-warn { color: var(--warn); }
+  .monitor-stat-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+  .waveform-wrap { display: flex; align-items: center; justify-content: center; gap: 3px; height: 44px; margin-bottom: 16px; }
+  .wave-bar { width: 3px; background: var(--muted); border-radius: 2px; height: 4px; transition: height 0.08s, background 0.3s; }
+  .waveform-wrap.active .wave-bar { background: var(--accent); }
+  .waveform-wrap.voice .wave-bar { background: var(--warn); }
+
+  .live-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; min-height: 52px; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 14px; }
+  .live-box.has-text { color: var(--text); }
+  .cursor { display: inline-block; width: 2px; height: 13px; background: var(--accent); margin-left: 2px; animation: blink 1s infinite; vertical-align: middle; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .filter-log { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-pill { font-family: 'DM Mono', monospace; font-size: 10px; padding: 3px 9px; border-radius: 20px; }
+  .filter-pill.pass { background: rgba(0,255,135,0.08); border: 1px solid rgba(0,255,135,0.2); color: var(--accent); }
+  .filter-pill.fail { background: rgba(255,59,59,0.08); border: 1px solid rgba(255,59,59,0.2); color: var(--danger); }
+  .filter-pill.wait { background: rgba(100,100,100,0.1); border: 1px solid var(--border); color: var(--muted); }
+
+  .menu-active-bar { background: rgba(0,255,135,0.06); border: 1px solid rgba(0,255,135,0.15); border-radius: 8px; padding: 8px 14px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); margin-bottom: 14px; display: none; }
+  .menu-active-bar.visible { display: block; }
+
+  .btn-main { width: 100%; padding: 15px; border-radius: 12px; border: none; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .btn-main.start { background: var(--accent); color: #000; }
+  .btn-main.start:hover { background: #00e077; transform: translateY(-1px); }
+  .btn-main.stop { background: rgba(255,59,59,0.12); color: var(--danger); border: 1px solid rgba(255,59,59,0.3); }
+
+  /* TEXT TEST */
+  .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+  .divider::before,.divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .divider span { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+
+  /* ERROR */
+  .error-box { background: rgba(255,59,59,0.08); border: 1px solid rgba(255,59,59,0.3); border-radius: 10px; padding: 13px 16px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--danger); margin-top: 14px; display: none; line-height: 1.6; }
+  .error-box.visible { display: block; }
+
+  /* RESULTS */
+  .results-section { display: none; animation: fadeUp 0.4s ease forwards; margin-top: 20px; }
+  .results-section.visible { display: block; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+  .section-label { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .category-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-family: 'DM Mono', monospace; font-size: 12px; margin-bottom: 14px; }
+  .cat-converted { background: rgba(0,255,135,0.1); border: 1px solid rgba(0,255,135,0.3); color: var(--accent); }
+  .cat-lost { background: rgba(240,192,64,0.1); border: 1px solid rgba(240,192,64,0.3); color: var(--warn); }
+  .cat-fraud { background: rgba(255,59,59,0.1); border: 1px solid rgba(255,59,59,0.3); color: var(--danger); }
+  .cat-behavior { background: rgba(100,160,255,0.1); border: 1px solid rgba(100,160,255,0.3); color: #6aa0ff; }
+  .cat-none { background: rgba(100,100,100,0.1); border: 1px solid var(--border); color: var(--muted); }
+
+  .analysis-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); line-height: 1.8; margin-bottom: 12px; }
+  .analysis-box strong { color: var(--text); }
+
+  .sales-grid { display: grid; gap: 8px; margin-bottom: 12px; }
+  .sale-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 17px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; animation: slideIn 0.3s ease forwards; opacity: 0; }
+  @keyframes slideIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+  .sale-card:nth-child(2){animation-delay:.07s} .sale-card:nth-child(3){animation-delay:.14s}
+  .sale-product { font-size: 14px; font-weight: 600; }
+  .sale-qty { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); background: var(--bg); padding: 3px 8px; border-radius: 5px; border: 1px solid var(--border); }
+  .sale-value { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--accent); text-align: right; min-width: 80px; }
+  .sale-value.unknown { color: var(--muted); font-size: 11px; }
+
+  .summary-bar { background: var(--surface); border: 1px solid var(--accent); border-radius: 12px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .summary-label { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .summary-total { font-size: 24px; font-weight: 700; color: var(--accent); font-family: 'DM Mono', monospace; }
+  .summary-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* HISTORY */
+  .history-section { margin-top: 32px; }
+  .stats-footer { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-top: 16px; }
+  .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+  .stat-box-value { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 500; }
+  .stat-box-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; margin-top: 3px; }
+  .sv{color:var(--accent)} .sl{color:var(--warn)} .sf{color:var(--danger)} .sb{color:#6aa0ff}
+
+  .history-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 17px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .history-time { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  .history-desc { font-size: 13px; }
+  .history-total { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--accent); text-align: right; }
+  .history-cat { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .history-empty { text-align: center; padding: 28px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; border: 1px dashed var(--border); border-radius: 12px; }
+
+  /* SPINNER */
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,255,135,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  .loading-text { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); margin-top: 10px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">🎙</div>
+      <div class="logo-text">Voz<span>Venda</span></div>
+    </div>
+    <div class="status-badge" id="statusBadge">CONFIGURANDO</div>
+  </div>
+
+  <!-- STEPS -->
+  <div class="steps">
+    <div class="step active" id="step1" onclick="goStep(1)">
+      <div class="step-num">1</div> Configuração
+    </div>
+    <div class="step" id="step2" onclick="goStep(2)">
+      <div class="step-num">2</div> Cardápio
+    </div>
+    <div class="step" id="step3" onclick="goStep(3)">
+      <div class="step-num">3</div> Escuta
+    </div>
+  </div>
+
+  <!-- STEP 1: CONFIG -->
+  <div class="panel active" id="panel1">
+    <div class="card">
+      <div class="card-title">Chave Gemini API</div>
+      <div class="apikey-row">
+        <input type="password" class="apikey-input" id="apiKey" placeholder="AIza..." oninput="checkApiKey()">
+        <div class="apikey-ok" id="apikeyOk">✅</div>
+      </div>
+      <div class="hint">Gratuito em <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a> → Get API key</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Nome do estabelecimento</div>
+      <div class="field-group">
+        <input type="text" class="field-input" id="businessName" placeholder="Ex: Cali House, Burger Bros...">
+      </div>
+      <div class="card-title" style="margin-top:8px">Tipo de negócio</div>
+      <select class="field-input" id="businessType">
+        <option value="fast_food">Fast food / Lanche</option>
+        <option value="restaurant">Restaurante</option>
+        <option value="bar">Bar / Boteco</option>
+        <option value="bakery">Padaria / Café</option>
+        <option value="other">Outro</option>
+      </select>
+    </div>
+
+    <button class="btn-primary" onclick="goStep(2)">Próximo → Cardápio</button>
+  </div>
+
+  <!-- STEP 2: MENU -->
+  <div class="panel" id="panel2">
+
+    <div class="menu-tabs">
+      <button class="menu-tab active" id="mtab-photo" onclick="setMenuTab('photo')">📸 Foto</button>
+      <button class="menu-tab" id="mtab-link" onclick="setMenuTab('link')">🔗 Link</button>
+      <button class="menu-tab" id="mtab-manual" onclick="setMenuTab('manual')">✏️ Manual</button>
+    </div>
+
+    <!-- PHOTO -->
+    <div class="menu-panel active" id="mpanel-photo">
+      <div class="card">
+        <div class="card-title">Foto(s) do cardápio</div>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="menuPhotos" accept="image/*" multiple onchange="handlePhotos(this)">
+          <div class="upload-icon">🖼️</div>
+          <div class="upload-label">Clique ou arraste as fotos aqui</div>
+          <div class="upload-hint">JPG, PNG, WEBP • Múltiplas fotos aceitas</div>
+        </div>
+        <div class="preview-grid" id="previewGrid"></div>
+        <button class="btn-primary" id="btnReadPhotos" onclick="readMenuFromPhotos()" style="display:none">
+          Ler cardápio das fotos →
+        </button>
+        <div class="loading-text" id="photoLoading" style="display:none">
+          <span class="spinner"></span> Analisando imagens...
+        </div>
+      </div>
+    </div>
+
+    <!-- LINK -->
+    <div class="menu-panel" id="mpanel-link">
+      <div class="card">
+        <div class="card-title">Link do iFood ou site</div>
+        <div class="field-group">
+          <label class="field-label">URL do cardápio</label>
+          <input type="url" class="field-input" id="menuLink" placeholder="https://www.ifood.com.br/delivery/... ou seu site">
+        </div>
+        <button class="btn-primary" onclick="readMenuFromLink()">Ler cardápio do link →</button>
+        <div class="loading-text" id="linkLoading" style="display:none">
+          <span class="spinner"></span> Lendo página...
+        </div>
+        <div class="error-box" id="linkError"></div>
+      </div>
+    </div>
+
+    <!-- MANUAL -->
+    <div class="menu-panel" id="mpanel-manual">
+      <div class="card">
+        <div class="card-title">Digitar cardápio manualmente</div>
+        <div class="hint" style="margin-bottom:12px">Uma linha por item. Formato: Nome do produto - R$ 00,00</div>
+        <textarea class="field-input" id="menuManual" placeholder="Burrito Frango - R$ 35,00&#10;Wrap Vegano - R$ 28,00&#10;Combo Duplo - R$ 52,00&#10;Coca-Cola lata - R$ 7,00"></textarea>
+        <button class="btn-primary" onclick="readMenuManual()">Usar este cardápio →</button>
+      </div>
+    </div>
+
+    <!-- LOADED MENU -->
+    <div class="menu-loaded" id="menuLoaded">
+      <div class="menu-loaded-title">✅ Cardápio carregado — <span id="menuItemCount">0</span> itens</div>
+      <div class="menu-items-grid" id="menuItemsList"></div>
+      <button class="btn-secondary" onclick="clearMenu()">Trocar cardápio</button>
+      <button class="btn-primary" onclick="goStep(3)" style="margin-top:8px">Iniciar escuta →</button>
+    </div>
+
+    <div class="error-box" id="menuError"></div>
+    <button class="btn-secondary" onclick="goStep(3)" style="margin-top:8px">Pular — sem cardápio</button>
+  </div>
+
+  <!-- STEP 3: LISTEN -->
+  <div class="panel" id="panel3">
+
+    <div class="card">
+      <div class="card-title">Configurações de captura</div>
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>Janela de captura</label>
+          <input type="range" id="windowSize" min="15" max="180" step="15" value="60" oninput="updateSettings()">
+          <div class="setting-value" id="windowVal">60s</div>
+        </div>
+        <div class="setting-item">
+          <label>Duração mínima de voz</label>
+          <input type="range" id="minDuration" min="3" max="20" step="1" value="5" oninput="updateSettings()">
+          <div class="setting-value" id="minDurVal">5s</div>
+        </div>
+        <div class="setting-item">
+          <label>Filtro palavras-chave</label>
+          <select id="keywordMode">
+            <option value="strict">Estrito</option>
+            <option value="soft" selected>Flexível</option>
+            <option value="off">Desligado</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="monitor" id="monitor">
+      <div class="monitor-stats">
+        <div class="monitor-stat">
+          <div class="monitor-stat-value v-accent" id="statSeg">00:00</div>
+          <div class="monitor-stat-label">Janela atual</div>
+        </div>
+        <div class="monitor-stat">
+          <div class="monitor-stat-value" id="statVoz">0s</div>
+          <div class="monitor-stat-label">Voz detectada</div>
+        </div>
+        <div class="monitor-stat">
+          <div class="monitor-stat-value" id="statEnvios">0</div>
+          <div class="monitor-stat-label">Enviado à IA</div>
+        </div>
+      </div>
+
+      <div class="waveform-wrap" id="waveformWrap"></div>
+      <div class="menu-active-bar" id="menuActiveBar"></div>
+      <div class="live-box" id="liveBox">Aguardando início da escuta...</div>
+      <div class="filter-log" id="filterLog">
+        <span class="filter-pill wait">VAD</span>
+        <span class="filter-pill wait">Duração</span>
+        <span class="filter-pill wait">Palavras-chave</span>
+        <span class="filter-pill wait">IA</span>
+      </div>
+      <div class="error-box" id="errorBox"></div>
+      <div style="margin-top:16px">
+        <button class="btn-main start" id="btnMain" onclick="toggleListening()">▶ Iniciar escuta contínua</button>
+      </div>
+    </div>
+
+    <div class="divider"><span>OU TESTE MANUALMENTE</span></div>
+    <div class="card">
+      <div class="card-title">Digitar / colar conversa</div>
+      <textarea class="field-input" id="textInput" placeholder='Ex: "Me dá dois burritos e uma água. Quanto fica? Fica 38 reais."' style="height:90px"></textarea>
+      <button class="btn-primary" id="btnAnalyze" onclick="analyzeText()">Analisar conversa →</button>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="results-section" id="resultsSection">
+      <div class="section-label">Análise</div>
+      <div id="categoryBadge"></div>
+      <div class="analysis-box" id="analysisBox"></div>
+      <div class="sales-grid" id="salesGrid"></div>
+      <div class="summary-bar">
+        <div>
+          <div class="summary-label">Total identificado</div>
+          <div class="summary-count" id="summaryCount">—</div>
+        </div>
+        <div class="summary-total" id="summaryTotal">—</div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="history-section">
+      <div class="section-label">Histórico da sessão</div>
+      <div class="stats-footer">
+        <div class="stat-box"><div class="stat-box-value sv" id="cntConverted">0</div><div class="stat-box-label">Convertidas</div></div>
+        <div class="stat-box"><div class="stat-box-value sl" id="cntLost">0</div><div class="stat-box-label">Não convertidas</div></div>
+        <div class="stat-box"><div class="stat-box-value sf" id="cntFraud">0</div><div class="stat-box-label">Suspeitas</div></div>
+        <div class="stat-box"><div class="stat-box-value sb" id="cntBehavior">0</div><div class="stat-box-label">Comportamento</div></div>
+      </div>
+      <div style="margin-top:10px">
+        <div class="history-empty" id="historyEmpty">Nenhuma análise registrada ainda.</div>
+        <div id="historyList"></div>
+      </div>
+    </div>
+
+  </div><!-- end panel3 -->
+
+</div>
+
+<script>
+// ---- State ----
+let menuItems = []; // [{name, price}]
+let isListening = false;
+let recognition = null;
+let windowTimer = null;
+let windowSeconds = 0;
+let voiceSeconds = 0;
+let apiCallCount = 0;
+let currentWindowText = '';
+let voiceActive = false;
+let totalVoiceInWindow = 0;
+let history = [];
+let counts = { converted:0, lost:0, fraud:0, behavior:0 };
+let menuPhotoFiles = [];
+
+const KEYWORDS = [
+  'quanto','preço','preco','custa','valor','cobrar','pagar','troco','dinheiro',
+  'cartão','cartao','pix','quero','me dá','me da','pode me','traz','peço','peco',
+  'pede','pedido','queria','combo','porção','porcao','lanche','suco','refrigerante',
+  'água','agua','bebida','frango','carne','reais','real','conto','r$',
+  'não tem','acabou','falta','desconto'
+];
+
+// ---- Init ----
+const wfc = document.getElementById('waveformWrap');
+for (let i = 0; i < 32; i++) {
+  const b = document.createElement('div'); b.className = 'wave-bar'; wfc.appendChild(b);
+}
+
+window.onload = () => {
+  const k = localStorage.getItem('vozvenda_gemini_key');
+  if (k) { document.getElementById('apiKey').value = k; checkApiKey(); }
+  const m = localStorage.getItem('vozvenda_menu');
+  if (m) { menuItems = JSON.parse(m); renderMenuLoaded(); }
+  updateSettings();
+};
+
+// ---- Steps ----
+function goStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById(`step${i}`).classList.toggle('active', i === n);
+    document.getElementById(`panel${i}`).classList.toggle('active', i === n);
+  });
+  if (n === 3) {
+    const bar = document.getElementById('menuActiveBar');
+    if (menuItems.length > 0) {
+      bar.textContent = `📋 Cardápio ativo: ${menuItems.length} itens — IA vai comparar cada venda com o cardápio`;
+      bar.classList.add('visible');
+    }
+    document.getElementById('statusBadge').className = 'status-badge';
+    document.getElementById('statusBadge').textContent = 'PRONTO';
+  }
+}
+
+// ---- API Key ----
+function checkApiKey() {
+  const k = document.getElementById('apiKey').value.trim();
+  if (k) localStorage.setItem('vozvenda_gemini_key', k);
+  document.getElementById('apikeyOk').classList.toggle('visible', k.startsWith('AIza') && k.length > 20);
+}
+
+// ---- Menu Tabs ----
+function setMenuTab(tab) {
+  ['photo','link','manual'].forEach(t => {
+    document.getElementById(`mtab-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`mpanel-${t}`).classList.toggle('active', t === tab);
+  });
+}
+
+// ---- MENU FROM PHOTOS ----
+function handlePhotos(input) {
+  menuPhotoFiles = Array.from(input.files);
+  const grid = document.getElementById('previewGrid');
+  grid.innerHTML = '';
+  menuPhotoFiles.forEach((file, i) => {
+    const url = URL.createObjectURL(file);
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+    item.innerHTML = `<img class="preview-img" src="${url}"><button class="preview-remove" onclick="removePhoto(${i})">×</button>`;
+    grid.appendChild(item);
+  });
+  document.getElementById('btnReadPhotos').style.display = menuPhotoFiles.length ? 'block' : 'none';
+}
+
+function removePhoto(i) {
+  menuPhotoFiles.splice(i, 1);
+  handlePhotos({ files: menuPhotoFiles });
+}
+
+async function readMenuFromPhotos() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { showMenuError('Insira sua chave Gemini primeiro.'); return; }
+  if (!menuPhotoFiles.length) { showMenuError('Selecione pelo menos uma foto.'); return; }
+
+  document.getElementById('photoLoading').style.display = 'block';
+  document.getElementById('btnReadPhotos').disabled = true;
+
+  try {
+    // Convert all images to base64
+    const parts = [];
+    for (const file of menuPhotoFiles) {
+      const b64 = await fileToBase64(file);
+      const mime = file.type || 'image/jpeg';
+      parts.push({ inlineData: { mimeType: mime, data: b64 } });
+    }
+    parts.push({ text: `Extraia todos os itens e preços deste cardápio.
+Responda APENAS com JSON válido, sem markdown, sem backticks:
+{
+  "items": [
+    {"name": "nome do produto", "price": 15.90}
+  ]
+}
+Se não houver preço visível, use null. Inclua todos os itens visíveis.` });
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, maxOutputTokens: 2000 } })
+      }
+    );
+
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message); }
+    const data = await res.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    menuItems = parsed.items || [];
+    saveMenu();
+    renderMenuLoaded();
+
+  } catch (e) {
+    showMenuError('Erro ao ler fotos: ' + (e.message || 'Tente novamente.'));
+  } finally {
+    document.getElementById('photoLoading').style.display = 'none';
+    document.getElementById('btnReadPhotos').disabled = false;
+  }
+}
+
+// ---- MENU FROM LINK ----
+async function readMenuFromLink() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const url = document.getElementById('menuLink').value.trim();
+  if (!apiKey) { showMenuError('Insira sua chave Gemini primeiro.'); return; }
+  if (!url) { showMenuError('Insira uma URL.'); return; }
+
+  document.getElementById('linkLoading').style.display = 'block';
+  document.getElementById('linkError').classList.remove('visible');
+
+  try {
+    // Use allorigins proxy to bypass CORS
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy);
+    const data = await res.json();
+    const html = data.contents || '';
+
+    // Strip HTML tags to get text
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const text = tmp.innerText?.substring(0, 8000) || '';
+
+    if (!text.trim()) throw new Error('Não foi possível ler o conteúdo da página.');
+
+    // Send to Gemini to extract menu
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Extraia todos os itens e preços de cardápio deste texto de página web.
+Responda APENAS com JSON válido, sem markdown, sem backticks:
+{
+  "items": [
+    {"name": "nome do produto", "price": 15.90}
+  ]
+}
+Se não houver preço, use null. Texto da página:
+${text}` }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 2000 }
+        })
+      }
+    );
+
+    if (!geminiRes.ok) { const e = await geminiRes.json(); throw new Error(e.error?.message); }
+    const geminiData = await geminiRes.json();
+    const raw = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    menuItems = parsed.items || [];
+    saveMenu();
+    renderMenuLoaded();
+
+  } catch (e) {
+    const errBox = document.getElementById('linkError');
+    errBox.textContent = '⚠️ ' + (e.message || 'Erro ao ler o link. Tente outro método.');
+    errBox.classList.add('visible');
+  } finally {
+    document.getElementById('linkLoading').style.display = 'none';
+  }
+}
+
+// ---- MENU MANUAL ----
+function readMenuManual() {
+  const text = document.getElementById('menuManual').value.trim();
+  if (!text) { showMenuError('Digite pelo menos um item.'); return; }
+
+  menuItems = text.split('\n').filter(l => l.trim()).map(line => {
+    const parts = line.split(/[-–|]/);
+    const name = parts[0]?.trim() || line.trim();
+    const priceMatch = line.match(/R?\$?\s*(\d+[.,]\d{2})/);
+    const price = priceMatch ? parseFloat(priceMatch[1].replace(',', '.')) : null;
+    return { name, price };
+  });
+
+  saveMenu();
+  renderMenuLoaded();
+}
+
+// ---- Menu Helpers ----
+function saveMenu() {
+  localStorage.setItem('vozvenda_menu', JSON.stringify(menuItems));
+}
+
+function renderMenuLoaded() {
+  if (!menuItems.length) return;
+  document.getElementById('menuItemCount').textContent = menuItems.length;
+  document.getElementById('menuItemsList').innerHTML = menuItems.map(item => `
+    <div class="menu-item-row">
+      <span class="menu-item-name">${item.name}</span>
+      <span class="menu-item-price">${item.price ? 'R$ ' + item.price.toFixed(2).replace('.', ',') : '—'}</span>
+    </div>
+  `).join('');
+  document.getElementById('menuLoaded').classList.add('visible');
+  document.getElementById('menuError').classList.remove('visible');
+}
+
+function clearMenu() {
+  menuItems = [];
+  localStorage.removeItem('vozvenda_menu');
+  document.getElementById('menuLoaded').classList.remove('visible');
+}
+
+function showMenuError(msg) {
+  const box = document.getElementById('menuError');
+  box.textContent = '⚠️ ' + msg;
+  box.classList.add('visible');
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onloadend = () => resolve(r.result.split(',')[1]);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+// ---- Settings ----
+function updateSettings() {
+  document.getElementById('windowVal').textContent = document.getElementById('windowSize').value + 's';
+  document.getElementById('minDurVal').textContent = document.getElementById('minDuration').value + 's';
+}
+
+// ---- Keywords ----
+function hasKeyword(text) {
+  const lower = text.toLowerCase();
+  // Also check menu item names
+  const menuKeywords = menuItems.map(i => i.name.toLowerCase());
+  return KEYWORDS.some(kw => lower.includes(kw)) || menuKeywords.some(kw => lower.includes(kw.split(' ')[0]));
+}
+
+// ---- Filters ----
+function updateFilterLog(vad, duration, keyword, ia) {
+  const labels = ['VAD','Duração','Palavras-chave','IA'];
+  const states = [vad, duration, keyword, ia];
+  document.getElementById('filterLog').innerHTML = labels.map((p,i) => {
+    const s = states[i];
+    const cls = s==='pass'?'pass':s==='fail'?'fail':'wait';
+    const icon = s==='pass'?'✓':s==='fail'?'✗':'·';
+    return `<span class="filter-pill ${cls}">${icon} ${p}</span>`;
+  }).join('');
+}
+
+// ---- Listening ----
+function toggleListening() {
+  if (isListening) stopListening(); else startListening();
+}
+
+function startListening() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showError('Use o Chrome para escuta ao vivo. Ou use o campo de texto abaixo.'); return; }
+
+  isListening = true;
+  currentWindowText = '';
+  windowSeconds = 0;
+  voiceSeconds = 0;
+  totalVoiceInWindow = 0;
+
+  recognition = new SR();
+  recognition.lang = 'pt-BR';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript + ' ';
+      else interim += e.results[i][0].transcript;
+    }
+    currentWindowText += final;
+    const box = document.getElementById('liveBox');
+    const txt = currentWindowText + interim;
+    box.innerHTML = txt ? `${txt}<span class="cursor"></span>` : 'Aguardando fala...';
+    box.classList.toggle('has-text', !!txt);
+
+    if (!voiceActive && (final || interim)) {
+      voiceActive = true;
+      wfc.classList.add('voice');
+      document.getElementById('monitor').classList.add('voice-detected');
+      document.getElementById('statusBadge').className = 'status-badge voice';
+      document.getElementById('statusBadge').textContent = 'VOZ DETECTADA';
+    }
+  };
+
+  recognition.onspeechend = () => {
+    if (voiceActive) { totalVoiceInWindow += 1; voiceActive = false; }
+    wfc.classList.remove('voice');
+    wfc.classList.add('active');
+    document.getElementById('monitor').classList.remove('voice-detected');
+    document.getElementById('monitor').classList.add('listening');
+    document.getElementById('statusBadge').className = 'status-badge listening';
+    document.getElementById('statusBadge').textContent = 'OUVINDO';
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed') showError('Microfone bloqueado. Permita o acesso no Chrome.');
+  };
+
+  recognition.onend = () => { if (isListening) recognition.start(); };
+  recognition.start();
+
+  const windowSize = parseInt(document.getElementById('windowSize').value);
+  windowTimer = setInterval(() => {
+    windowSeconds++;
+    if (voiceActive) totalVoiceInWindow += 1;
+    voiceSeconds = Math.round(totalVoiceInWindow);
+
+    const m = String(Math.floor(windowSeconds/60)).padStart(2,'0');
+    const s = String(windowSeconds%60).padStart(2,'0');
+    document.getElementById('statSeg').textContent = `${m}:${s}`;
+    document.getElementById('statVoz').textContent = voiceSeconds + 's';
+    document.getElementById('statEnvios').textContent = apiCallCount;
+
+    wfc.querySelectorAll('.wave-bar').forEach(b => {
+      b.style.height = (3 + Math.random() * 40 * (voiceActive ? 0.8 : 0.12)) + 'px';
+    });
+
+    if (windowSeconds >= windowSize) processWindow();
+  }, 1000);
+
+  document.getElementById('btnMain').className = 'btn-main stop';
+  document.getElementById('btnMain').textContent = '⏹ Parar escuta';
+  document.getElementById('monitor').classList.add('listening');
+  wfc.classList.add('active');
+  document.getElementById('statusBadge').className = 'status-badge listening';
+  document.getElementById('statusBadge').textContent = 'OUVINDO';
+  document.getElementById('liveBox').textContent = '';
+  document.getElementById('errorBox').classList.remove('visible');
+  updateFilterLog('wait','wait','wait','wait');
+}
+
+function stopListening() {
+  isListening = false;
+  if (recognition) { recognition.onend = null; recognition.stop(); }
+  clearInterval(windowTimer);
+  document.getElementById('btnMain').className = 'btn-main start';
+  document.getElementById('btnMain').textContent = '▶ Iniciar escuta contínua';
+  document.getElementById('monitor').classList.remove('listening','voice-detected','analyzing');
+  wfc.classList.remove('active','voice');
+  wfc.querySelectorAll('.wave-bar').forEach(b => b.style.height = '4px');
+  document.getElementById('statusBadge').className = 'status-badge';
+  document.getElementById('statusBadge').textContent = 'PARADO';
+}
+
+async function processWindow() {
+  const text = currentWindowText.trim();
+  currentWindowText = '';
+  windowSeconds = 0;
+  totalVoiceInWindow = 0;
+  voiceSeconds = 0;
+  document.getElementById('statSeg').textContent = '00:00';
+  document.getElementById('statVoz').textContent = '0s';
+
+  if (!text) { updateFilterLog('fail','wait','wait','wait'); return; }
+  updateFilterLog('pass','wait','wait','wait');
+
+  const minDur = parseInt(document.getElementById('minDuration').value);
+  if (voiceSeconds < minDur && text.split(' ').length < 4) {
+    updateFilterLog('pass','fail','wait','wait'); return;
+  }
+  updateFilterLog('pass','pass','wait','wait');
+
+  const kwMode = document.getElementById('keywordMode').value;
+  if (kwMode === 'strict' && !hasKeyword(text)) {
+    updateFilterLog('pass','pass','fail','wait'); return;
+  }
+  updateFilterLog('pass','pass','pass','wait');
+
+  apiCallCount++;
+  document.getElementById('statEnvios').textContent = apiCallCount;
+  document.getElementById('monitor').classList.add('analyzing');
+  document.getElementById('statusBadge').className = 'status-badge analyzing';
+  document.getElementById('statusBadge').textContent = 'ANALISANDO';
+
+  await sendToGemini(text);
+
+  document.getElementById('monitor').classList.remove('analyzing');
+  if (isListening) {
+    document.getElementById('statusBadge').className = 'status-badge listening';
+    document.getElementById('statusBadge').textContent = 'OUVINDO';
+  }
+  updateFilterLog('pass','pass','pass','pass');
+}
+
+function analyzeText() {
+  const text = document.getElementById('textInput').value.trim();
+  if (!text) { showError('Digite a conversa antes de analisar.'); return; }
+  document.getElementById('btnAnalyze').disabled = true;
+  document.getElementById('btnAnalyze').textContent = 'Analisando...';
+  document.getElementById('errorBox').classList.remove('visible');
+  sendToGemini(text);
+}
+
+// ---- Build persistent system prompt ----
+function buildSystemPrompt() {
+  const bizName = document.getElementById('businessName').value.trim() || 'estabelecimento';
+  const bizType = document.getElementById('businessType').value;
+
+  const bizTypeLabel = {
+    fast_food: 'fast food', restaurant: 'restaurante',
+    bar: 'bar/boteco', bakery: 'padaria/café', other: 'estabelecimento'
+  }[bizType] || 'estabelecimento';
+
+  let menuSection = '';
+  if (menuItems.length > 0) {
+    const list = menuItems.map(i =>
+      `  - ${i.name}${i.price ? ` — R$ ${i.price.toFixed(2).replace('.', ',')}` : ''}`
+    ).join('\n');
+    menuSection = `
+## CARDÁPIO DE "${bizName}"
+${list}
+
+Instruções sobre o cardápio:
+- Produto mencionado que NÃO consta no cardápio → registre em "observacoes" como: "produto não identificado no cardápio — conferir no caixa". Não classifique como fraude.
+- Valor mencionado DIFERENTE do cadastrado → registre em "observacoes" como: "valor difere do cardápio — conferir no caixa". Preços podem variar por promoção, combo ou atualização. Não classifique como fraude.
+- Erros de pronúncia e transcrição são comuns — use o cardápio como referência para interpretar o contexto.`;
+  }
+
+  return `Você é o VozVenda, sistema de registro e auditoria de atendimento do ${bizTypeLabel} "${bizName}", no Brasil.
+
+## MISSÃO
+Seu papel é REGISTRAR e EVIDENCIAR — nunca acusar.
+O dono do estabelecimento usará o horário exato de cada transação registrada para:
+1. Conferir na câmera de segurança
+2. Conferir no sistema de caixa
+3. Tomar a decisão final sobre qualquer irregularidade
+
+Você apenas fornece os dados. A conclusão é sempre do dono.
+${menuSection}
+
+## CATEGORIAS DE CLASSIFICAÇÃO
+
+"converted" — Venda concluída
+  O cliente pediu, o funcionário atendeu, o valor foi acordado ou pago.
+  Registre todos os produtos, quantidades e valores mencionados.
+
+"lost" — Venda não concluída
+  O cliente demonstrou interesse mas não comprou.
+  Motivos: produto em falta, preço acima do esperado, fila, desistência, mal atendimento.
+  Registre o motivo identificado em "observacoes".
+
+"fraud" — Indício explícito de irregularidade
+  USE SOMENTE quando houver fala EXPLÍCITA e CLARA de irregularidade.
+  Exemplos: "não vou registrar isso", "pode levar que não cobro", "coloca menos no sistema".
+  NÃO use para: produto fora do cardápio, preço diferente, desconto sem contexto.
+  Registre a fala exata ou trecho suspeito em "alerta".
+
+"behavior" — Comportamento relevante do funcionário
+  Grosseria, desatenção, oportunidade de upsell claramente perdida.
+  Base para treinamento de vendas e desenvolvimento profissional.
+  Registre o comportamento em "observacoes".
+
+"none" — Sem relevância para o negócio.
+
+## REGRAS DE ANÁLISE
+- Interprete SEMPRE pelo contexto, nunca pela literalidade.
+- Valores aproximados ("uns 30", "em torno de 35") → registre como mencionados.
+- Se houver múltiplos aspectos, priorize: fraud > behavior > lost > converted > none.
+- "fraud" exige fala explícita. Na dúvida, use "behavior" ou "lost" com observação.
+
+## FORMATO DE RESPOSTA
+Responda APENAS com JSON válido. Sem markdown, sem backticks, sem texto antes ou depois.
+{
+  "categoria": "converted | lost | fraud | behavior | none",
+  "resumo": "Uma frase objetiva do que aconteceu.",
+  "vendas": [{"produto": "nome", "quantidade": 1, "valor_unitario": 15.90}],
+  "alerta": "Trecho suspeito — somente se fraud. Caso contrário: null.",
+  "observacoes": "Produto fora do cardápio, valor a conferir, motivo da perda, comportamento, upsell perdido. Null se não houver."
+}
+Regras: vendas=[] se sem produtos. valor_unitario=null se não mencionado. alerta=null se não for fraud. Nunca omita campos.`;
+}
+}
+
+// ---- Gemini API ----
+async function sendToGemini(texto) {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { resetControls(); showError('Insira sua chave do Gemini.'); return; }
+
+  const systemPrompt = buildSystemPrompt();
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `${systemPrompt}\n\nConversa a analisar:\n"${texto}"` }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1000 }
+        })
+      }
+    );
+
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    const data = await res.json();
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    resetControls();
+    renderResults(parsed);
+
+  } catch (e) {
+    resetControls();
+    showError('Erro: ' + (e.message || 'Verifique sua chave e conexão.'));
+  }
+}
+
+// ---- Render ----
+const CAT = {
+  converted: { icon:'✅', label:'Venda convertida',     cls:'cat-converted' },
+  lost:      { icon:'⚠️', label:'Venda não convertida', cls:'cat-lost' },
+  fraud:     { icon:'🚨', label:'Suspeita / Fraude',    cls:'cat-fraud' },
+  behavior:  { icon:'👤', label:'Comportamento',        cls:'cat-behavior' },
+  none:      { icon:'—',  label:'Sem relevância',       cls:'cat-none' },
+};
+
+function renderResults(data) {
+  const cat = CAT[data.categoria] || CAT.none;
+  document.getElementById('categoryBadge').innerHTML =
+    `<div class="category-badge ${cat.cls}">${cat.icon} ${cat.label}</div>`;
+
+  let html = `<strong>🕐 ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</strong> — ${data.resumo || '—'}`;
+  if (data.alerta) html += `<br><strong style="color:var(--danger)">⚠ Alerta:</strong> ${data.alerta}`;
+  if (data.observacoes) html += `<br><strong>Obs:</strong> ${data.observacoes}`;
+  document.getElementById('analysisBox').innerHTML = html;
+
+  const grid = document.getElementById('salesGrid');
+  grid.innerHTML = '';
+  let total = 0;
+  (data.vendas || []).forEach((v, i) => {
+    const card = document.createElement('div');
+    card.className = 'sale-card';
+    card.style.animationDelay = (i * 0.07) + 's';
+    const sub = v.valor_unitario ? v.valor_unitario * v.quantidade : null;
+    if (sub) total += sub;
+    card.innerHTML = `
+      <div class="sale-product">${v.produto}</div>
+      <div class="sale-qty">× ${v.quantidade}</div>
+      <div class="sale-value ${sub?'':'unknown'}">${sub ? 'R$ '+sub.toFixed(2).replace('.',',') : 'Valor não informado'}</div>`;
+    grid.appendChild(card);
+  });
+
+  const n = (data.vendas||[]).length;
+  document.getElementById('summaryCount').textContent = n ? `${n} ${n===1?'item':'itens'}` : 'Sem itens';
+  document.getElementById('summaryTotal').textContent = total > 0 ? 'R$ '+total.toFixed(2).replace('.',',') : '—';
+  document.getElementById('resultsSection').classList.add('visible');
+
+  const now = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  history.unshift({...data, total, time: now});
+  if (data.categoria==='converted') counts.converted++;
+  else if (data.categoria==='lost') counts.lost++;
+  else if (data.categoria==='fraud') counts.fraud++;
+  else if (data.categoria==='behavior') counts.behavior++;
+  document.getElementById('cntConverted').textContent = counts.converted;
+  document.getElementById('cntLost').textContent = counts.lost;
+  document.getElementById('cntFraud').textContent = counts.fraud;
+  document.getElementById('cntBehavior').textContent = counts.behavior;
+  document.getElementById('historyEmpty').style.display = 'none';
+  renderHistory();
+}
+
+function renderHistory() {
+  document.getElementById('historyList').innerHTML = history.map(h => {
+    const cat = CAT[h.categoria] || CAT.none;
+    const desc = h.vendas?.length ? h.vendas.map(v=>v.produto).join(', ') : (h.resumo||'—');
+    return `<div class="history-card">
+      <div><div class="history-time">${h.time}</div><div class="history-desc">${desc}</div></div>
+      <div class="history-right">
+        <div class="history-total">${h.total>0?'R$ '+h.total.toFixed(2).replace('.',','):'—'}</div>
+        <div class="history-cat">${cat.icon} ${cat.label}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function resetControls() {
+  document.getElementById('btnAnalyze').disabled = false;
+  document.getElementById('btnAnalyze').textContent = 'Analisar conversa →';
+}
+
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = '⚠️ ' + msg;
+  box.classList.add('visible');
+}
+</script>
+</body>
+</html>

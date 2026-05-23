@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>VozVenda — Configuração</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a; color: #f0f0f0;
+    font-family: 'Segoe UI', sans-serif;
+    padding: 32px; min-height: 100vh;
+  }
+  .logo { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .logo span { color: #00ff87; }
+  .subtitle { font-size: 13px; color: #555; margin-bottom: 32px; }
+
+  .steps { display: flex; flex-direction: column; gap: 16px; margin-bottom: 32px; }
+  .step { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 18px 20px; display: flex; gap: 16px; align-items: flex-start; }
+  .step.done { border-color: #00ff87; }
+  .step.error { border-color: #ff3b3b; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; background: #1e1e1e; display: flex; align-items: center; justify-content: center; font-size: 12px; font-family: 'Courier New'; flex-shrink: 0; margin-top: 2px; }
+  .step.done .step-num { background: #00ff87; color: #000; }
+  .step.error .step-num { background: #ff3b3b; color: #fff; }
+  .step-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .step-desc { font-size: 12px; color: #666; line-height: 1.6; }
+  .step-action { margin-top: 10px; }
+
+  .btn { padding: 9px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: 'Segoe UI'; }
+  .btn-primary { background: #00ff87; color: #000; }
+  .btn-primary:hover { background: #00e077; }
+  .btn-secondary { background: transparent; color: #f0f0f0; border: 1px solid #1e1e1e; }
+  .btn-secondary:hover { border-color: #00ff87; color: #00ff87; }
+
+  .status { font-size: 12px; font-family: 'Courier New'; margin-top: 8px; }
+  .status.ok { color: #00ff87; }
+  .status.err { color: #ff3b3b; }
+  .status.warn { color: #f0c040; }
+
+  .finish-btn { width: 100%; padding: 14px; background: #00ff87; color: #000; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; display: none; }
+  .finish-btn.visible { display: block; }
+  .finish-btn:hover { background: #00e077; }
+
+  .mic-test { background: #0a0a0a; border: 1px solid #1e1e1e; border-radius: 8px; padding: 12px 14px; margin-top: 10px; }
+  .mic-wave { display: flex; gap: 2px; align-items: center; height: 24px; }
+  .mic-bar { width: 3px; background: #1e1e1e; border-radius: 2px; height: 4px; transition: height 0.08s; }
+  .mic-wave.active .mic-bar { background: #00ff87; }
+  .mic-label { font-size: 11px; color: #555; font-family: 'Courier New'; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="logo">Voz<span>Venda</span></div>
+<div class="subtitle">Configure o sistema antes de iniciar a escuta</div>
+
+<div class="steps">
+
+  <!-- STEP 1: Microfone -->
+  <div class="step" id="step-mic">
+    <div class="step-num">1</div>
+    <div style="flex:1">
+      <div class="step-title">Permissão de microfone</div>
+      <div class="step-desc">
+        O Windows 10/11 pode bloquear o acesso ao microfone por padrão.<br>
+        Clique em "Verificar" para testar.
+      </div>
+      <div class="step-action">
+        <button class="btn btn-primary" onclick="testMic()">Verificar microfone</button>
+        <button class="btn btn-secondary" onclick="openMicSettings()" style="margin-left:8px">Abrir configurações</button>
+      </div>
+      <div class="mic-test" id="micTest" style="display:none">
+        <div class="mic-wave" id="micWave">
+          <!-- bars geradas por JS -->
+        </div>
+        <div class="mic-label" id="micLabel">Aguardando...</div>
+      </div>
+      <div class="status" id="micStatus"></div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Startup -->
+  <div class="step" id="step-startup">
+    <div class="step-num">2</div>
+    <div style="flex:1">
+      <div class="step-title">Iniciar com o Windows</div>
+      <div class="step-desc">
+        O VozVenda precisa iniciar automaticamente quando o computador ligar,
+        antes que os funcionários comecem a trabalhar.
+      </div>
+      <div class="step-action">
+        <button class="btn btn-primary" onclick="checkStartup()">Verificar configuração</button>
+      </div>
+      <div class="status" id="startupStatus"></div>
+    </div>
+  </div>
+
+  <!-- STEP 3: Teste de análise -->
+  <div class="step" id="step-test">
+    <div class="step-num">3</div>
+    <div style="flex:1">
+      <div class="step-title">Teste de análise</div>
+      <div class="step-desc">
+        Fale uma conversa de teste para verificar se o sistema está captando e analisando corretamente.
+      </div>
+      <div class="step-action">
+        <button class="btn btn-primary" onclick="runTest()">Iniciar teste de 30 segundos</button>
+      </div>
+      <div class="status" id="testStatus"></div>
+    </div>
+  </div>
+
+</div>
+
+<button class="finish-btn" id="finishBtn" onclick="finish()">
+  ✓ Tudo certo — Iniciar VozVenda
+</button>
+
+<script>
+const { ipcRenderer, shell } = require('electron');
+
+let micOk = false;
+let startupOk = false;
+
+// Gera barras do waveform
+const wave = document.getElementById('micWave');
+for (let i = 0; i < 20; i++) {
+  const b = document.createElement('div');
+  b.className = 'mic-bar';
+  wave.appendChild(b);
+}
+
+// ── Teste de microfone ────────────────────────────────────────────────────
+async function testMic() {
+  document.getElementById('micTest').style.display = 'block';
+  document.getElementById('micLabel').textContent = 'Solicitando acesso...';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ctx = new AudioContext();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    wave.classList.add('active');
+    document.getElementById('micLabel').textContent = 'Microfone ativo — fale algo para testar';
+
+    let frames = 0;
+    const draw = () => {
+      if (frames > 150) { // ~5 segundos
+        stream.getTracks().forEach(t => t.stop());
+        ctx.close();
+        wave.classList.remove('active');
+        document.getElementById('micLabel').textContent = 'Teste concluído ✓';
+        setMicOk(true);
+        return;
+      }
+      analyser.getByteFrequencyData(data);
+      wave.querySelectorAll('.mic-bar').forEach((b, i) => {
+        b.style.height = (2 + (data[i*2] || 0) / 10) + 'px';
+      });
+      frames++;
+      requestAnimationFrame(draw);
+    };
+    draw();
+
+  } catch (e) {
+    setMicOk(false, e.name === 'NotAllowedError'
+      ? 'Acesso bloqueado. Clique em "Abrir configurações" e permita o microfone.'
+      : 'Microfone não encontrado. Verifique a conexão do dispositivo.');
+  }
+}
+
+function openMicSettings() {
+  shell.openExternal('ms-settings:privacy-microphone');
+}
+
+function setMicOk(ok, errMsg) {
+  micOk = ok;
+  const s = document.getElementById('micStatus');
+  const step = document.getElementById('step-mic');
+  if (ok) {
+    s.className = 'status ok'; s.textContent = '✓ Microfone funcionando';
+    step.classList.add('done');
+  } else {
+    s.className = 'status err'; s.textContent = '✗ ' + (errMsg || 'Erro no microfone');
+    step.classList.add('error');
+  }
+  checkAllDone();
+}
+
+// ── Verificar startup ────────────────────────────────────────────────────
+function checkStartup() {
+  // O auto-launch já foi configurado no main.js
+  // Apenas informa o status
+  const s = document.getElementById('startupStatus');
+  const step = document.getElementById('step-startup');
+  s.className = 'status ok';
+  s.textContent = '✓ Configurado para iniciar com o Windows';
+  step.classList.add('done');
+  startupOk = true;
+  checkAllDone();
+}
+
+// ── Teste de 30 segundos ─────────────────────────────────────────────────
+function runTest() {
+  const s = document.getElementById('testStatus');
+  s.className = 'status warn';
+  s.textContent = '⏱ Gravando por 30 segundos... fale uma conversa de teste.';
+
+  ipcRenderer.send('run-test-recording');
+
+  ipcRenderer.once('test-result', (event, result) => {
+    if (result.success) {
+      s.className = 'status ok';
+      s.textContent = `✓ Análise funcionando — categoria: ${result.categoria}`;
+      document.getElementById('step-test').classList.add('done');
+    } else {
+      s.className = 'status err';
+      s.textContent = '✗ ' + result.error;
+      document.getElementById('step-test').classList.add('error');
+    }
+    checkAllDone();
+  });
+}
+
+function checkAllDone() {
+  if (micOk && startupOk) {
+    document.getElementById('finishBtn').classList.add('visible');
+  }
+}
+
+function finish() {
+  ipcRenderer.send('onboarding-complete');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VozVenda — Ativação</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    color: #f0f0f0;
+    font-family: 'Segoe UI', sans-serif;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+  .box { width: 100%; max-width: 360px; }
+  .logo { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+  .logo span { color: #00ff87; }
+  .sub { font-size: 13px; color: #555; margin-bottom: 28px; }
+  label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 6px; font-family: 'Courier New', monospace; }
+  input {
+    width: 100%; padding: 12px 14px;
+    background: #111; border: 1px solid #1e1e1e;
+    border-radius: 8px; color: #f0f0f0;
+    font-family: 'Courier New', monospace; font-size: 14px;
+    outline: none; margin-bottom: 14px;
+    transition: border-color 0.2s;
+  }
+  input:focus { border-color: #00ff87; }
+  button {
+    width: 100%; padding: 13px;
+    background: #00ff87; color: #000;
+    border: none; border-radius: 8px;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: background 0.2s;
+  }
+  button:hover { background: #00e077; }
+  button:disabled { background: #1e1e1e; color: #555; cursor: not-allowed; }
+  .error { color: #ff3b3b; font-size: 12px; font-family: 'Courier New', monospace; margin-top: 10px; display: none; }
+  .error.visible { display: block; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">Voz<span>Venda</span></div>
+  <div class="sub">Insira sua chave de licença para ativar</div>
+  <label>Chave de licença</label>
+  <input type="text" id="licenseKey" placeholder="VV-XXXX-XXXX-XXXX" oninput="onInput()">
+  <button id="btnActivate" onclick="activate()" disabled>Ativar →</button>
+  <div class="error" id="errorMsg"></div>
+</div>
+
+<script>
+const { ipcRenderer } = require('electron');
+const Store = require('electron-store');
+const store = new Store({ encryptionKey: 'vozvenda-secret-key-2024' });
+
+function onInput() {
+  const val = document.getElementById('licenseKey').value.trim();
+  document.getElementById('btnActivate').disabled = val.length < 6;
+}
+
+async function activate() {
+  const key = document.getElementById('licenseKey').value.trim();
+  const btn = document.getElementById('btnActivate');
+  btn.disabled = true;
+  btn.textContent = 'Validando...';
+
+  store.set('license_key', key);
+  ipcRenderer.send('retry-activation');
+}
+
+ipcRenderer.on('activation-failed', () => {
+  const err = document.getElementById('errorMsg');
+  err.textContent = 'Chave inválida ou expirada. Verifique e tente novamente.';
+  err.classList.add('visible');
+  document.getElementById('btnActivate').disabled = false;
+  document.getElementById('btnActivate').textContent = 'Ativar →';
+});
+</script>
+</body>
+</html>
